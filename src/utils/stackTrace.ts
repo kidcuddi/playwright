@@ -15,16 +15,11 @@
  */
 
 import path from 'path';
-import { StackFrame } from '../common/types';
+import { StackFrame } from '../protocol/channels';
 import StackUtils from 'stack-utils';
 import { isUnderTest } from './utils';
 
 const stackUtils = new StackUtils();
-
-export function getCallerFilePath(ignorePrefix: string): string | null {
-  const frame = captureStackTrace().frames.find(f => !f.file.startsWith(ignorePrefix));
-  return frame ? frame.file : null;
-}
 
 export function rewriteErrorMessage(e: Error, newMessage: string): Error {
   if (e.stack) {
@@ -41,25 +36,50 @@ const PW_LIB_DIRS = [
   'playwright-chromium',
   'playwright-firefox',
   'playwright-webkit',
-].map(packageName => path.sep + path.join(packageName, 'lib'));
+  path.join('@playwright', 'test'),
+].map(packageName => path.sep + packageName);
 
-export function captureStackTrace(): { stack: string, frames: StackFrame[] } {
-  const stack = new Error().stack!;
+const runnerNpmPkgLib = path.join('@playwright', 'test', 'lib', 'test');
+const runnerLib = path.join('lib', 'test');
+const runnerSrc = path.join('src', 'test');
+
+function includesFileInPlaywrightSubDir(subDir: string, fileName: string) {
+  return PW_LIB_DIRS.map(p => path.join(p, subDir)).some(libDir => fileName.includes(libDir));
+}
+
+export type ParsedStackTrace = {
+  frames: StackFrame[];
+  frameTexts: string[];
+  apiName: string;
+};
+
+export function captureStackTrace(): ParsedStackTrace {
+  const stackTraceLimit = Error.stackTraceLimit;
+  Error.stackTraceLimit = 30;
+  const error = new Error();
+  const stack = error.stack!;
+  Error.stackTraceLimit = stackTraceLimit;
   const frames: StackFrame[] = [];
-  for (const line of stack.split('\n')) {
+  const frameTexts: string[] = [];
+  const lines = stack.split('\n').reverse();
+  let apiName = '';
+
+  const isTesting = !!process.env.PWTEST_CLI_ALLOW_TEST_COMMAND || isUnderTest();
+
+  for (const line of lines) {
     const frame = stackUtils.parseLine(line);
     if (!frame || !frame.file)
       continue;
     if (frame.file.startsWith('internal'))
       continue;
     const fileName = path.resolve(process.cwd(), frame.file);
-    if (PW_LIB_DIRS.some(libDir => fileName.includes(libDir)))
+    if (isTesting && fileName.includes(path.join('playwright', 'tests', 'config', 'coverage.js')))
       continue;
-    // for tests.
-    if (isUnderTest() && fileName.includes(path.join('playwright', 'src')))
-      continue;
-    if (isUnderTest() && fileName.includes(path.join('playwright', 'tests', 'config', 'coverage.js')))
-      continue;
+    if (isFilePartOfPlaywright(isTesting, fileName)) {
+      apiName = frame.function ? frame.function[0].toLowerCase() + frame.function.slice(1) : '';
+      break;
+    }
+    frameTexts.push(line);
     frames.push({
       file: fileName,
       line: frame.line,
@@ -67,7 +87,16 @@ export function captureStackTrace(): { stack: string, frames: StackFrame[] } {
       function: frame.function,
     });
   }
-  return { stack, frames };
+  frames.reverse();
+  frameTexts.reverse();
+  return { frames, frameTexts, apiName };
+}
+
+function isFilePartOfPlaywright(isTesting: boolean, fileName: string): boolean {
+  const isPlaywrightTest = fileName.includes(runnerNpmPkgLib);
+  const isLocalPlaywright = isTesting && (fileName.includes(runnerSrc) || fileName.includes(runnerLib));
+  const isInPlaywright = (includesFileInPlaywrightSubDir('src', fileName) || includesFileInPlaywrightSubDir('lib', fileName));
+  return !isPlaywrightTest && !isLocalPlaywright && isInPlaywright;
 }
 
 export function splitErrorMessage(message: string): { name: string, message: string } {

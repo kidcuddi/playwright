@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-import { test as it, expect } from '../config/playwrightTest';
-
-it.beforeEach(async ({ browserName }) => {
-  it.skip(browserName !== 'chromium');
-});
+import { playwrightTest as it, expect } from '../config/browserTest';
 
 it('should throw with remote-debugging-pipe argument', async ({browserType, browserOptions, mode}) => {
   it.skip(mode !== 'default');
@@ -38,8 +34,8 @@ it('should not throw with remote-debugging-port argument', async ({browserType, 
   await browser.close();
 });
 
-it('should open devtools when "devtools: true" option is given', async ({browserType, browserOptions, mode, platform}) => {
-  it.skip(mode !== 'default' || platform === 'win32');
+it('should open devtools when "devtools: true" option is given', async ({browserType, browserOptions, mode, platform, channel}) => {
+  it.skip(mode !== 'default' || platform === 'win32' || !!channel);
 
   let devtoolsCallback;
   const devtoolsPromise = new Promise(f => devtoolsCallback = f);
@@ -75,6 +71,8 @@ it('should return background pages', async ({browserType, browserOptions, create
   expect(context.backgroundPages()).toContain(backgroundPage);
   expect(context.pages()).not.toContain(backgroundPage);
   await context.close();
+  expect(context.pages().length).toBe(0);
+  expect(context.backgroundPages().length).toBe(0);
 });
 
 it('should return background pages when recording video', async ({browserType, browserOptions, createUserDataDir, asset}, testInfo) => {

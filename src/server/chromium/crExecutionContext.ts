@@ -31,7 +31,18 @@ export class CRExecutionContext implements js.ExecutionContextDelegate {
     this._contextId = contextPayload.id;
   }
 
-  async rawEvaluate(expression: string): Promise<string> {
+  async rawEvaluateJSON(expression: string): Promise<any> {
+    const { exceptionDetails, result: remoteObject } = await this._client.send('Runtime.evaluate', {
+      expression,
+      contextId: this._contextId,
+      returnByValue: true,
+    }).catch(rewriteError);
+    if (exceptionDetails)
+      throw new Error('Evaluation failed: ' + getExceptionMessage(exceptionDetails));
+    return remoteObject.value;
+  }
+
+  async rawEvaluateHandle(expression: string): Promise<js.ObjectId> {
     const { exceptionDetails, result: remoteObject } = await this._client.send('Runtime.evaluate', {
       expression,
       contextId: this._contextId,
@@ -98,7 +109,7 @@ function rewriteError(error: Error): Protocol.Runtime.evaluateReturnValue {
   if (error.message.includes('Object couldn\'t be returned by value'))
     return {result: {type: 'undefined'}};
 
-  if (error.message.endsWith('Cannot find context with specified id') || error.message.endsWith('Inspected target navigated or closed') || error.message.endsWith('Execution context was destroyed.'))
+  if (js.isContextDestroyedError(error) || error.message.endsWith('Inspected target navigated or closed'))
     throw new Error('Execution context was destroyed, most likely because of a navigation.');
   if (error instanceof TypeError && error.message.startsWith('Converting circular structure to JSON'))
     rewriteErrorMessage(error, error.message + ' Are you passing a nested JSHandle?');

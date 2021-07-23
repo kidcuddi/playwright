@@ -31,21 +31,6 @@ Metadata:
     apiName: string?
 
 
-WaitForEventInfo:
-  type: object
-  properties:
-    waitId: string
-    phase:
-      type: enum
-      literals:
-      - before
-      - after
-      - log
-    apiName: string?
-    message: string?
-    error: string?
-
-
 Point:
   type: object
   properties:
@@ -220,21 +205,25 @@ SerializedError:
     value: SerializedValue?
 
 
+InterceptedResponse:
+  type: object
+  properties:
+    request: Request
+    status: number
+    statusText: string
+    headers:
+      type: array
+      items:
+        type: object
+        properties:
+          name: string
+          value: string
+
+
 LaunchOptions:
   type: mixin
   properties:
-    channel:
-      type: enum?
-      literals:
-      - chrome
-      - chrome-beta
-      - chrome-dev
-      - chrome-canary
-      - msedge
-      - msedge-beta
-      - msedge-dev
-      - msedge-canary
-      - firefox-stable
+    channel: string?
     executablePath: string?
     args:
       type: array?
@@ -260,6 +249,7 @@ LaunchOptions:
         username: string?
         password: string?
     downloadsPath: string?
+    tracesDir: string?
     chromiumSandbox: boolean?
 
 
@@ -311,8 +301,13 @@ ContextOptions:
       - dark
       - light
       - no-preference
+    reducedMotion:
+      type: enum?
+      literals:
+      - reduce
+      - no-preference
     acceptDownloads: boolean?
-    _traceDir: string?
+    baseURL: string?
     _debugName: string?
     recordVideo:
       type: object?
@@ -372,6 +367,20 @@ Playwright:
     # Only present when connecting remotely via BrowserType.connect() method.
     preLaunchedBrowser: Browser?
 
+  commands:
+
+    setForwardedPorts:
+      parameters:
+        ports:
+          type: array
+          items: number
+
+  events:
+
+    incomingSocksSocket:
+      parameters:
+        socket: SocksSocket
+
 
 Selectors:
   type: interface
@@ -415,6 +424,9 @@ BrowserType:
       parameters:
         sdkLanguage: string
         endpointURL: string
+        headers:
+          type: array?
+          items: NameValue
         slowMo: number?
         timeout: number?
       returns:
@@ -478,9 +490,32 @@ Browser:
     close:
 
 
+EventTarget:
+  type: interface
+
+  commands:
+    waitForEventInfo:
+      parameters:
+        info:
+          type: object
+          properties:
+            waitId: string
+            phase:
+              type: enum
+              literals:
+              - before
+              - after
+              - log
+            event: string?
+            message: string?
+            error: string?
+      tracing:
+        snapshot: true
 
 BrowserContext:
   type: interface
+
+  extends: EventTarget
 
   initializer:
     isChromium: boolean
@@ -598,6 +633,18 @@ BrowserContext:
       returns:
         session: CDPSession
 
+    tracingStart:
+      parameters:
+        name: string?
+        snapshots: boolean?
+        screenshots: boolean?
+
+    tracingStop:
+
+    tracingExport:
+      returns:
+        artifact: Artifact
+
   events:
 
     bindingCall:
@@ -627,8 +674,33 @@ BrowserContext:
       parameters:
         worker: Worker
 
+    request:
+      parameters:
+        request: Request
+        page: Page?
+
+    requestFailed:
+      parameters:
+        request: Request
+        failureText: string?
+        responseEndTiming: number
+        page: Page?
+
+    requestFinished:
+      parameters:
+        request: Request
+        responseEndTiming: number
+        page: Page?
+
+    response:
+      parameters:
+        response: Response
+        page: Page?
+
 Page:
   type: interface
+
+  extends: EventTarget
 
   initializer:
     mainFrame: Frame
@@ -679,6 +751,13 @@ Page:
           - no-preference
           # Reset emulated value to the system default.
           - null
+        reducedMotion:
+          type: enum?
+          literals:
+          - reduce
+          - no-preference
+          # Reset emulated value to the system default.
+          - null
 
     exposeBinding:
       parameters:
@@ -696,6 +775,8 @@ Page:
           - networkidle
       returns:
         response: Response?
+      tracing:
+        snapshot: true
 
     goForward:
       parameters:
@@ -708,6 +789,8 @@ Page:
           - networkidle
       returns:
         response: Response?
+      tracing:
+        snapshot: true
 
     reload:
       parameters:
@@ -720,6 +803,8 @@ Page:
           - networkidle
       returns:
         response: Response?
+      tracing:
+        snapshot: true
 
     screenshot:
       parameters:
@@ -753,34 +838,48 @@ Page:
           properties:
             width: number
             height: number
+      tracing:
+        snapshot: true
 
     keyboardDown:
       parameters:
         key: string
+      tracing:
+        snapshot: true
 
     keyboardUp:
       parameters:
         key: string
+      tracing:
+        snapshot: true
 
     keyboardInsertText:
       parameters:
         text: string
+      tracing:
+        snapshot: true
 
     keyboardType:
       parameters:
         text: string
         delay: number?
+      tracing:
+        snapshot: true
 
     keyboardPress:
       parameters:
         key: string
         delay: number?
+      tracing:
+        snapshot: true
 
     mouseMove:
       parameters:
         x: number
         y: number
         steps: number?
+      tracing:
+        snapshot: true
 
     mouseDown:
       parameters:
@@ -791,6 +890,8 @@ Page:
           - right
           - middle
         clickCount: number?
+      tracing:
+        snapshot: true
 
     mouseUp:
       parameters:
@@ -801,6 +902,8 @@ Page:
           - right
           - middle
         clickCount: number?
+      tracing:
+        snapshot: true
 
     mouseClick:
       parameters:
@@ -814,11 +917,15 @@ Page:
           - right
           - middle
         clickCount: number?
+      tracing:
+        snapshot: true
 
     touchscreenTap:
       parameters:
         x: number
         y: number
+      tracing:
+        snapshot: true
 
     accessibilitySnapshot:
       parameters:
@@ -949,25 +1056,6 @@ Page:
       parameters:
         error: SerializedError
 
-    request:
-      parameters:
-        request: Request
-
-    requestFailed:
-      parameters:
-        request: Request
-        failureText: string?
-        responseEndTiming: number
-
-    requestFinished:
-      parameters:
-        request: Request
-        responseEndTiming: number
-
-    response:
-      parameters:
-        response: Response
-
     route:
       parameters:
         route: Route
@@ -1013,6 +1101,8 @@ Frame:
         arg: SerializedArgument
       returns:
         value: SerializedValue
+      tracing:
+        snapshot: true
 
     evalOnSelectorAll:
       parameters:
@@ -1022,6 +1112,8 @@ Frame:
         arg: SerializedArgument
       returns:
         value: SerializedValue
+      tracing:
+        snapshot: true
 
     addScriptTag:
       parameters:
@@ -1030,6 +1122,8 @@ Frame:
         type: string?
       returns:
         element: ElementHandle
+      tracing:
+        snapshot: true
 
     addStyleTag:
       parameters:
@@ -1037,6 +1131,8 @@ Frame:
         content: string?
       returns:
         element: ElementHandle
+      tracing:
+        snapshot: true
 
     check:
       parameters:
@@ -1046,6 +1142,8 @@ Frame:
         position: Point?
         timeout: number?
         trial: boolean?
+      tracing:
+        snapshot: true
 
     click:
       parameters:
@@ -1072,10 +1170,21 @@ Frame:
         clickCount: number?
         timeout: number?
         trial: boolean?
+      tracing:
+        snapshot: true
 
     content:
       returns:
         value: string
+
+    dragAndDrop:
+      parameters:
+        source: string
+        target: string
+        force: boolean?
+        noWaitAfter: boolean?
+        timeout: number?
+        trial: boolean?
 
     dblclick:
       parameters:
@@ -1101,6 +1210,8 @@ Frame:
           - middle
         timeout: number?
         trial: boolean?
+      tracing:
+        snapshot: true
 
     dispatchEvent:
       parameters:
@@ -1108,44 +1219,45 @@ Frame:
         type: string
         eventInit: SerializedArgument
         timeout: number?
+      tracing:
+        snapshot: true
 
     evaluateExpression:
       parameters:
         expression: string
         isFunction: boolean?
         arg: SerializedArgument
-        world:
-          type: enum?
-          literals:
-          - main
-          - utility
       returns:
         value: SerializedValue
+      tracing:
+        snapshot: true
 
     evaluateExpressionHandle:
       parameters:
         expression: string
         isFunction: boolean?
         arg: SerializedArgument
-        world:
-          type: enum?
-          literals:
-          - main
-          - utility
       returns:
         handle: JSHandle
+      tracing:
+        snapshot: true
 
     fill:
       parameters:
         selector: string
         value: string
+        force: boolean?
         timeout: number?
         noWaitAfter: boolean?
+      tracing:
+        snapshot: true
 
     focus:
       parameters:
         selector: string
         timeout: number?
+      tracing:
+        snapshot: true
 
     frameElement:
       returns:
@@ -1158,6 +1270,8 @@ Frame:
         timeout: number?
       returns:
         value: string?
+      tracing:
+        snapshot: true
 
     goto:
       parameters:
@@ -1172,6 +1286,8 @@ Frame:
         referer: string?
       returns:
         response: Response?
+      tracing:
+        snapshot: true
 
     hover:
       parameters:
@@ -1189,6 +1305,8 @@ Frame:
         position: Point?
         timeout: number?
         trial: boolean?
+      tracing:
+        snapshot: true
 
     innerHTML:
       parameters:
@@ -1196,6 +1314,8 @@ Frame:
         timeout: number?
       returns:
         value: string
+      tracing:
+        snapshot: true
 
     innerText:
       parameters:
@@ -1203,6 +1323,17 @@ Frame:
         timeout: number?
       returns:
         value: string
+      tracing:
+        snapshot: true
+
+    inputValue:
+      parameters:
+        selector: string
+        timeout: number?
+      returns:
+        value: string
+      tracing:
+        snapshot: true
 
     isChecked:
       parameters:
@@ -1210,6 +1341,8 @@ Frame:
         timeout: number?
       returns:
         value: boolean
+      tracing:
+        snapshot: true
 
     isDisabled:
       parameters:
@@ -1217,6 +1350,8 @@ Frame:
         timeout: number?
       returns:
         value: boolean
+      tracing:
+        snapshot: true
 
     isEnabled:
       parameters:
@@ -1224,6 +1359,8 @@ Frame:
         timeout: number?
       returns:
         value: boolean
+      tracing:
+        snapshot: true
 
     isHidden:
       parameters:
@@ -1231,6 +1368,8 @@ Frame:
         timeout: number?
       returns:
         value: boolean
+      tracing:
+        snapshot: true
 
     isVisible:
       parameters:
@@ -1245,6 +1384,8 @@ Frame:
         timeout: number?
       returns:
         value: boolean
+      tracing:
+        snapshot: true
 
     press:
       parameters:
@@ -1253,6 +1394,8 @@ Frame:
         delay: number?
         noWaitAfter: boolean?
         timeout: number?
+      tracing:
+        snapshot: true
 
     querySelector:
       parameters:
@@ -1282,12 +1425,15 @@ Frame:
               value: string?
               label: string?
               index: number?
+        force: boolean?
         timeout: number?
         noWaitAfter: boolean?
       returns:
         values:
           type: array
           items: string
+      tracing:
+        snapshot: true
 
     setContent:
       parameters:
@@ -1299,6 +1445,8 @@ Frame:
           - load
           - domcontentloaded
           - networkidle
+      tracing:
+        snapshot: true
 
     setInputFiles:
       parameters:
@@ -1309,10 +1457,12 @@ Frame:
             type: object
             properties:
               name: string
-              mimeType: string
+              mimeType: string?
               buffer: binary
         timeout: number?
         noWaitAfter: boolean?
+      tracing:
+        snapshot: true
 
     tap:
       parameters:
@@ -1331,6 +1481,8 @@ Frame:
         position: Point?
         timeout: number?
         trial: boolean?
+      tracing:
+        snapshot: true
 
     textContent:
       parameters:
@@ -1338,6 +1490,8 @@ Frame:
         timeout: number?
       returns:
         value: string?
+      tracing:
+        snapshot: true
 
     title:
       returns:
@@ -1350,6 +1504,8 @@ Frame:
         delay: number?
         noWaitAfter: boolean?
         timeout: number?
+      tracing:
+        snapshot: true
 
     uncheck:
       parameters:
@@ -1359,6 +1515,8 @@ Frame:
         position: Point?
         timeout: number?
         trial: boolean?
+      tracing:
+        snapshot: true
 
     waitForFunction:
       parameters:
@@ -1370,6 +1528,8 @@ Frame:
         pollingInterval: number?
       returns:
         handle: JSHandle
+      tracing:
+        snapshot: true
 
     waitForSelector:
       parameters:
@@ -1384,6 +1544,8 @@ Frame:
           - hidden
       returns:
         element: ElementHandle?
+      tracing:
+        snapshot: true
 
   events:
 
@@ -1460,6 +1622,8 @@ JSHandle:
         arg: SerializedArgument
       returns:
         value: SerializedValue
+      tracing:
+        snapshot: true
 
     evaluateExpressionHandle:
       parameters:
@@ -1468,6 +1632,8 @@ JSHandle:
         arg: SerializedArgument
       returns:
         handle: JSHandle
+      tracing:
+        snapshot: true
 
     getPropertyList:
       returns:
@@ -1512,6 +1678,8 @@ ElementHandle:
         arg: SerializedArgument
       returns:
         value: SerializedValue
+      tracing:
+        snapshot: true
 
     evalOnSelectorAll:
       parameters:
@@ -1521,6 +1689,8 @@ ElementHandle:
         arg: SerializedArgument
       returns:
         value: SerializedValue
+      tracing:
+        snapshot: true
 
     boundingBox:
       returns:
@@ -1533,6 +1703,8 @@ ElementHandle:
         position: Point?
         timeout: number?
         trial: boolean?
+      tracing:
+        snapshot: true
 
     click:
       parameters:
@@ -1558,6 +1730,8 @@ ElementHandle:
         clickCount: number?
         timeout: number?
         trial: boolean?
+      tracing:
+        snapshot: true
 
     contentFrame:
       returns:
@@ -1586,17 +1760,24 @@ ElementHandle:
           - middle
         timeout: number?
         trial: boolean?
+      tracing:
+        snapshot: true
 
     dispatchEvent:
       parameters:
         type: string
         eventInit: SerializedArgument
+      tracing:
+        snapshot: true
 
     fill:
       parameters:
         value: string
+        force: boolean?
         timeout: number?
         noWaitAfter: boolean?
+      tracing:
+        snapshot: true
 
     focus:
 
@@ -1621,12 +1802,18 @@ ElementHandle:
         position: Point?
         timeout: number?
         trial: boolean?
+      tracing:
+        snapshot: true
 
     innerHTML:
       returns:
         value: string
 
     innerText:
+      returns:
+        value: string
+
+    inputValue:
       returns:
         value: string
 
@@ -1664,6 +1851,8 @@ ElementHandle:
         delay: number?
         timeout: number?
         noWaitAfter: boolean?
+      tracing:
+        snapshot: true
 
     querySelector:
       parameters:
@@ -1695,6 +1884,8 @@ ElementHandle:
     scrollIntoViewIfNeeded:
       parameters:
         timeout: number?
+      tracing:
+        snapshot: true
 
     selectOption:
       parameters:
@@ -1709,16 +1900,22 @@ ElementHandle:
               value: string?
               label: string?
               index: number?
+        force: boolean?
         timeout: number?
         noWaitAfter: boolean?
       returns:
         values:
           type: array
           items: string
+      tracing:
+        snapshot: true
 
     selectText:
       parameters:
+        force: boolean?
         timeout: number?
+      tracing:
+        snapshot: true
 
     setInputFiles:
       parameters:
@@ -1728,10 +1925,12 @@ ElementHandle:
             type: object
             properties:
               name: string
-              mimeType: string
+              mimeType: string?
               buffer: binary
         timeout: number?
         noWaitAfter: boolean?
+      tracing:
+        snapshot: true
 
     tap:
       parameters:
@@ -1749,6 +1948,8 @@ ElementHandle:
         position: Point?
         timeout: number?
         trial: boolean?
+      tracing:
+        snapshot: true
 
     textContent:
       returns:
@@ -1760,6 +1961,8 @@ ElementHandle:
         delay: number?
         noWaitAfter: boolean?
         timeout: number?
+      tracing:
+        snapshot: true
 
     uncheck:
       parameters:
@@ -1768,6 +1971,8 @@ ElementHandle:
         position: Point?
         timeout: number?
         trial: boolean?
+      tracing:
+        snapshot: true
 
     waitForElementState:
       parameters:
@@ -1781,6 +1986,8 @@ ElementHandle:
           - disabled
           - editable
         timeout: number?
+      tracing:
+        snapshot: true
 
     waitForSelector:
       parameters:
@@ -1795,6 +2002,8 @@ ElementHandle:
           - hidden
       returns:
         element: ElementHandle?
+      tracing:
+        snapshot: true
 
 
 Request:
@@ -1844,6 +2053,9 @@ Route:
           type: array?
           items: NameValue
         postData: binary?
+        interceptResponse: boolean?
+      returns:
+        response: InterceptedResponse?
 
     fulfill:
       parameters:
@@ -1854,6 +2066,10 @@ Route:
           items: NameValue
         body: string?
         isBase64: boolean?
+
+    responseBody:
+      returns:
+        binary: binary
 
 
 ResourceTiming:
@@ -1903,9 +2119,36 @@ Response:
       returns:
         error: string?
 
+    securityDetails:
+      returns:
+        value: SecurityDetails?
+
+    serverAddr:
+      returns:
+        value: RemoteAddr?
+
+
+SecurityDetails:
+  type: object
+  properties:
+    issuer: string?
+    protocol: string?
+    subjectName: string?
+    validFrom: number?
+    validTo: number?
+
+
+RemoteAddr:
+  type: object
+  properties:
+    ipAddress: string
+    port: number
+
 
 WebSocket:
   type: interface
+
+  extends: EventTarget
 
   initializer:
     url: string
@@ -2019,6 +2262,8 @@ Artifact:
       returns:
         stream: Stream?
 
+    cancel:
+
     delete:
 
 
@@ -2075,6 +2320,47 @@ Electron:
           type: array?
           items: NameValue
         timeout: number?
+        acceptDownloads: boolean?
+        bypassCSP: boolean?
+        colorScheme:
+          type: enum?
+          literals:
+          - dark
+          - light
+          - no-preference
+        extraHTTPHeaders:
+          type: array?
+          items: NameValue
+        geolocation:
+          type: object?
+          properties:
+            longitude: number
+            latitude: number
+            accuracy: number?
+        httpCredentials:
+          type: object?
+          properties:
+            username: string
+            password: string
+        ignoreHTTPSErrors: boolean?
+        locale: string?
+        offline: boolean?
+        recordHar:
+          type: object?
+          properties:
+            omitContent: boolean?
+            path: string
+        recordVideo:
+          type: object?
+          properties:
+            dir: string
+            size:
+              type: object?
+              properties:
+                width: number
+                height: number
+        timezoneId: string?
+
       returns:
         electronApplication: ElectronApplication
 
@@ -2082,7 +2368,18 @@ Electron:
 ElectronApplication:
   type: interface
 
+  extends: EventTarget
+
+  initializer:
+    context: BrowserContext
+
   commands:
+
+    browserWindow:
+      parameters:
+        page: Page
+      returns:
+        handle: JSHandle
 
     evaluateExpression:
       parameters:
@@ -2103,19 +2400,7 @@ ElectronApplication:
     close:
 
   events:
-
-    # This event happens once immediately after creation.
-    context:
-      parameters:
-        context: BrowserContext
-
     close:
-
-    window:
-      parameters:
-        page: Page
-        browserWindow: JSHandle
-
 
 
 Android:
@@ -2151,6 +2436,8 @@ AndroidSocket:
 
 AndroidDevice:
   type: interface
+
+  extends: EventTarget
 
   initializer:
     model: string
@@ -2317,8 +2604,12 @@ AndroidDevice:
           - dark
           - light
           - no-preference
+        reducedMotion:
+          type: enum?
+          literals:
+          - reduce
+          - no-preference
         acceptDownloads: boolean?
-        _traceDir: string?
         _debugName: string?
         recordVideo:
           type: object?
@@ -2450,3 +2741,29 @@ AndroidElementInfo:
     longClickable: boolean
     scrollable: boolean
     selected: boolean
+
+SocksSocket:
+  type: interface
+
+  initializer:
+    dstAddr: string
+    dstPort: number
+
+  commands:
+    write:
+      parameters:
+        data: binary
+
+    error:
+      parameters:
+        error: string
+
+    connected:
+
+    end:
+
+  events:
+    data:
+      parameters:
+        data: binary
+    close:

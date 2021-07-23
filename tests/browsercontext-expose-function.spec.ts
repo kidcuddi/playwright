@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { test as it, expect } from './config/contextTest';
+import { contextTest as it, expect } from './config/browserTest';
 
 it('expose binding should work', async ({context}) => {
   let bindingSource;
@@ -84,4 +84,13 @@ it('exposeBindingHandle should work', async ({context}) => {
   });
   expect(await target.evaluate(x => x.foo)).toBe(42);
   expect(result).toEqual(17);
+});
+
+it('should work with CSP', async ({ page, context, server }) => {
+  server.setCSP('/empty.html', 'default-src "self"');
+  await page.goto(server.EMPTY_PAGE);
+  let called = false;
+  await context.exposeBinding('hi', () => called = true);
+  await page.evaluate(() => (window as any).hi());
+  expect(called).toBe(true);
 });

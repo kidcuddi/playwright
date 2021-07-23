@@ -15,7 +15,6 @@
  */
 
 import { EventEmitter } from 'events';
-import { Point, StackFrame } from '../common/types';
 import { createGuid } from '../utils/utils';
 import type { Browser } from './browser';
 import type { BrowserContext } from './browserContext';
@@ -25,6 +24,7 @@ import type { Frame } from './frames';
 import type { Page } from './page';
 
 export type Attribution = {
+  isInternal: boolean,
   browserType?: BrowserType;
   browser?: Browser;
   context?: BrowserContext;
@@ -32,25 +32,8 @@ export type Attribution = {
   frame?: Frame;
 };
 
-export type CallMetadata = {
-  id: string;
-  startTime: number;
-  endTime: number;
-  pauseStartTime?: number;
-  pauseEndTime?: number;
-  type: string;
-  method: string;
-  params: any;
-  apiName?: string;
-  stack?: StackFrame[];
-  log: string[];
-  snapshots: { title: string, snapshotName: string }[];
-  error?: string;
-  point?: Point;
-  objectId?: string;
-  pageId?: string;
-  frameId?: string;
-};
+import { CallMetadata } from '../protocol/callMetadata';
+export { CallMetadata } from '../protocol/callMetadata';
 
 export class SdkObject extends EventEmitter {
   guid: string;
@@ -67,34 +50,31 @@ export class SdkObject extends EventEmitter {
 }
 
 export interface Instrumentation {
-  onContextCreated(context: BrowserContext): Promise<void>;
-  onContextWillDestroy(context: BrowserContext): Promise<void>;
-  onContextDidDestroy(context: BrowserContext): Promise<void>;
-
+  addListener(listener: InstrumentationListener): void;
+  removeListener(listener: InstrumentationListener): void;
   onBeforeCall(sdkObject: SdkObject, metadata: CallMetadata): Promise<void>;
   onBeforeInputAction(sdkObject: SdkObject, metadata: CallMetadata, element: ElementHandle): Promise<void>;
   onCallLog(logName: string, message: string, sdkObject: SdkObject, metadata: CallMetadata): void;
   onAfterCall(sdkObject: SdkObject, metadata: CallMetadata): Promise<void>;
-
   onEvent(sdkObject: SdkObject, metadata: CallMetadata): void;
 }
 
 export interface InstrumentationListener {
-  onContextCreated?(context: BrowserContext): Promise<void>;
-  onContextWillDestroy?(context: BrowserContext): Promise<void>;
-  onContextDidDestroy?(context: BrowserContext): Promise<void>;
-
   onBeforeCall?(sdkObject: SdkObject, metadata: CallMetadata): Promise<void>;
   onBeforeInputAction?(sdkObject: SdkObject, metadata: CallMetadata, element: ElementHandle): Promise<void>;
   onCallLog?(logName: string, message: string, sdkObject: SdkObject, metadata: CallMetadata): void;
   onAfterCall?(sdkObject: SdkObject, metadata: CallMetadata): Promise<void>;
-
   onEvent?(sdkObject: SdkObject, metadata: CallMetadata): void;
 }
 
-export function multiplexInstrumentation(listeners: InstrumentationListener[]): Instrumentation {
+export function createInstrumentation(): Instrumentation {
+  const listeners: InstrumentationListener[] = [];
   return new Proxy({}, {
     get: (obj: any, prop: string) => {
+      if (prop === 'addListener')
+        return (listener: InstrumentationListener) => listeners.push(listener);
+      if (prop === 'removeListener')
+        return (listener: InstrumentationListener) => listeners.splice(listeners.indexOf(listener), 1);
       if (!prop.startsWith('on'))
         return obj[prop];
       return async (...params: any[]) => {

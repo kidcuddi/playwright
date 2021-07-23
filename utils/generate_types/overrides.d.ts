@@ -20,10 +20,10 @@ import { Readable } from 'stream';
 import { Serializable, EvaluationArgument, PageFunction, PageFunctionOn, SmartHandle, ElementHandleForTag, BindingSource } from './structs';
 
 type PageWaitForSelectorOptionsNotHidden = PageWaitForSelectorOptions & {
-  state: 'visible'|'attached';
+  state?: 'visible'|'attached';
 };
 type ElementHandleWaitForSelectorOptionsNotHidden = ElementHandleWaitForSelectorOptions & {
-  state: 'visible'|'attached';
+  state?: 'visible'|'attached';
 };
 
 export interface Page {
@@ -140,13 +140,32 @@ export interface ElementHandle<T=Node> extends JSHandle<T> {
   waitForSelector(selector: string, options: ElementHandleWaitForSelectorOptions): Promise<null|ElementHandle<SVGElement | HTMLElement>>;
 }
 
+export interface Locator {
+  first(options?: {
+    timeout?: number;
+  }): Promise<null|ElementHandle<SVGElement | HTMLElement>>;
+  all(): Promise<null|ElementHandle<SVGElement | HTMLElement>[]>;
+  evaluate<R, Arg>(pageFunction: PageFunctionOn<SVGElement | HTMLElement, Arg, R>, arg: Arg): Promise<R>;
+  evaluate<R>(pageFunction: PageFunctionOn<SVGElement | HTMLElement, void, R>): Promise<R>;
+  evaluateAll<R, Arg>(pageFunction: PageFunctionOn<(SVGElement | HTMLElement)[], Arg, R>, arg: Arg): Promise<R>;
+  evaluateAll<R>(pageFunction: PageFunctionOn<(SVGElement | HTMLElement)[], void, R>): Promise<R>;
+}
+
 export interface BrowserType<Unused = {}> {
-  connectOverCDP(options: ConnectOverCDPOptions): Promise<Browser>;
+  connectOverCDP(endpointURL: string, options?: ConnectOverCDPOptions): Promise<Browser>;
   /**
    * Option `wsEndpoint` is deprecated. Instead use `endpointURL`.
    * @deprecated
    */
-  connectOverCDP(options: ConnectOptions): Promise<Browser>;
+  connectOverCDP(options: ConnectOverCDPOptions & { wsEndpoint?: string }): Promise<Browser>;
+  connect(wsEndpoint: string, options?: ConnectOptions): Promise<Browser>;
+  /**
+   * wsEndpoint in options is deprecated. Instead use `wsEndpoint`.
+   * @param wsEndpoint A browser websocket endpoint to connect to.
+   * @param options
+   * @deprecated
+   */
+  connect(options: ConnectOptions & { wsEndpoint?: string }): Promise<Browser>;
 }
 
 export interface CDPSession {
@@ -320,6 +339,12 @@ export type AndroidKey =
   'Cut' |
   'Copy' |
   'Paste';
+
+export const chromium: BrowserType;
+export const firefox: BrowserType;
+export const webkit: BrowserType;
+export const _electron: Electron;
+export const _android: Android;
 
 // This is required to not export everything by default. See https://github.com/Microsoft/TypeScript/issues/19545#issuecomment-340490459
 export {};

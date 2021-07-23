@@ -16,20 +16,14 @@
 
 import fs from 'fs';
 import path from 'path';
-import * as util from 'util';
-import { CRPage } from '../../chromium/crPage';
 import { Page } from '../../page';
 import { ProgressController } from '../../progress';
-import { createPlaywright } from '../../playwright';
 import { EventEmitter } from 'events';
 import { internalCallMetadata } from '../../instrumentation';
 import type { CallLog, EventData, Mode, Source } from './recorderTypes';
 import { BrowserContext } from '../../browserContext';
 import { isUnderTest } from '../../../utils/utils';
-import * as types from '../../types';
-
-const readFileAsync = util.promisify(fs.readFile);
-const existsAsync = (path: string): Promise<boolean> => new Promise(resolve => fs.stat(path, err => resolve(!err)));
+import { installAppIcon } from '../../chromium/crApp';
 
 declare global {
   interface Window {
@@ -59,17 +53,13 @@ export class RecorderApp extends EventEmitter {
   }
 
   private async _init() {
-    const icon = await readFileAsync(require.resolve('../../../web/recorder/app_icon.png'));
-    const crPopup = this._page._delegate as CRPage;
-    await crPopup._mainFrameSession._client.send('Browser.setDockTile', {
-      image: icon.toString('base64')
-    });
+    await installAppIcon(this._page);
 
     await this._page._setServerRequestInterceptor(async route => {
       if (route.request().url().startsWith('https://playwright/')) {
         const uri = route.request().url().substring('https://playwright/'.length);
         const file = require.resolve('../../../web/recorder/' + uri);
-        const buffer = await readFileAsync(file);
+        const buffer = await fs.promises.readFile(file);
         await route.fulfill({
           status: 200,
           headers: [
@@ -95,7 +85,7 @@ export class RecorderApp extends EventEmitter {
   }
 
   static async open(inspectedContext: BrowserContext): Promise<RecorderApp> {
-    const recorderPlaywright = createPlaywright(true);
+    const recorderPlaywright = require('../../playwright').createPlaywright(true) as import('../../playwright').Playwright;
     const args = [
       '--app=data:text/html,',
       '--window-size=600,600',
@@ -103,12 +93,11 @@ export class RecorderApp extends EventEmitter {
     ];
     if (process.env.PWTEST_RECORDER_PORT)
       args.push(`--remote-debugging-port=${process.env.PWTEST_RECORDER_PORT}`);
-    let channel: types.BrowserChannel | undefined;
+    let channel: string | undefined;
     let executablePath: string | undefined;
     if (inspectedContext._browser.options.isChromium) {
       channel = inspectedContext._browser.options.channel;
-      const defaultExecutablePath = recorderPlaywright.chromium.executablePath(channel);
-      if (!(await existsAsync(defaultExecutablePath)))
+      if (!channel)
         executablePath = inspectedContext._browser.options.customExecutablePath;
     }
     const context = await recorderPlaywright.chromium.launchPersistentContext(internalCallMetadata(), '', {

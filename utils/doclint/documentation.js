@@ -62,13 +62,21 @@ class Documentation {
   }
 
   /**
+   * @param {!Documentation} documentation
+   * @return {!Documentation}
+   */
+  mergeWith(documentation) {
+    return new Documentation([...this.classesArray, ...documentation.classesArray]);
+  }
+
+  /**
    * @param {string[]} errors
    */
   copyDocsFromSuperclasses(errors) {
     for (const [name, clazz] of this.classes.entries()) {
       clazz.validateOrder(errors, clazz);
 
-      if (!clazz.extends || clazz.extends === 'EventEmitter' || clazz.extends === 'Error' || clazz.extends === 'RuntimeException')
+      if (!clazz.extends || ['EventEmitter', 'Error', 'Exception', 'RuntimeException'].includes(clazz.extends))
         continue;
       const superClass = this.classes.get(clazz.extends);
       if (!superClass) {
@@ -304,6 +312,11 @@ Documentation.Member = class {
     };
     this.async = false;
     this.alias = name;
+    /**
+     * Param is true and option false
+     * @type {Boolean}
+     */
+    this.paramOrOption = null;
   }
 
   index() {
@@ -314,7 +327,8 @@ Documentation.Member = class {
       this.args.set(arg.name, arg);
       arg.enclosingMethod = this;
       if (arg.name === 'options') {
-        arg.type.properties.forEach(p => p.enclosingMethod = this );
+        arg.type.properties.sort((p1, p2) => p1.name.localeCompare(p2.name));
+        arg.type.properties.forEach(p => p.enclosingMethod = this);
       }
     }
   }
@@ -344,6 +358,7 @@ Documentation.Member = class {
   clone() {
     const result = new Documentation.Member(this.kind, this.langs, this.name, this.type, this.argsArray, this.spec, this.required);
     result.async = this.async;
+    result.paramOrOption = this.paramOrOption;
     return result;
   }
 

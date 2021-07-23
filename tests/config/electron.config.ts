@@ -14,35 +14,61 @@
  * limitations under the License.
  */
 
-import * as folio from 'folio';
+import type { Config } from './test-runner';
 import * as path from 'path';
-import { test as electronTest } from './electronTest';
-import { test as pageTest } from './pageTest';
-import { ServerEnv } from './serverEnv';
-import { ElectronEnv, ElectronPageEnv } from './electronEnv';
-import { CoverageEnv } from './coverage';
+import { electronFixtures } from '../electron/electronTest';
+import { test as pageTest } from '../page/pageTest';
+import { PlaywrightOptions } from './browserTest';
+import { CommonOptions } from './baseTest';
 
-const config: folio.Config = {
-  testDir: path.join(__dirname, '..'),
-  outputDir: path.join(__dirname, '..', '..', 'test-results'),
+const outputDir = path.join(__dirname, '..', '..', 'test-results');
+const testDir = path.join(__dirname, '..');
+const config: Config<CommonOptions & PlaywrightOptions> = {
+  testDir,
+  outputDir,
   timeout: 30000,
   globalTimeout: 5400000,
+  workers: process.env.CI ? 1 : undefined,
+  forbidOnly: !!process.env.CI,
+  preserveOutput: process.env.CI ? 'failures-only' : 'always',
+  retries: process.env.CI ? 3 : 0,
+  reporter: process.env.CI ? [
+    [ 'dot' ],
+    [ 'json', { outputFile: path.join(outputDir, 'report.json') } ],
+  ] : 'line',
+  projects: [],
 };
-if (process.env.CI) {
-  config.workers = 1;
-  config.forbidOnly = true;
-  config.retries = 3;
-}
-folio.setConfig(config);
 
-if (process.env.CI) {
-  folio.setReporters([
-    new folio.reporters.dot(),
-    new folio.reporters.json({ outputFile: path.join(__dirname, '..', '..', 'test-results', 'report.json') }),
-  ]);
-}
+const metadata = {
+  platform: process.platform,
+  headful: true,
+  browserName: 'electron',
+  channel: undefined,
+  mode: 'default',
+  video: false,
+};
 
-const serverEnv = new ServerEnv();
-const coverageEnv = new CoverageEnv('electron');
-electronTest.runWith(folio.merge(coverageEnv, serverEnv, new ElectronEnv()), { tag: 'electron' });
-pageTest.runWith(folio.merge(coverageEnv, serverEnv, new ElectronPageEnv()), { tag: 'electron' });
+config.projects.push({
+  name: 'chromium',  // We use 'chromium' here to share screenshots with chromium.
+  use: {
+    mode: 'default',
+    browserName: 'chromium',
+    coverageName: 'electron',
+  },
+  testDir: path.join(testDir, 'electron'),
+  metadata,
+});
+
+config.projects.push({
+  name: 'chromium',  // We use 'chromium' here to share screenshots with chromium.
+  use: {
+    mode: 'default',
+    browserName: 'chromium',
+    coverageName: 'electron',
+  },
+  testDir: path.join(testDir, 'page'),
+  define: { test: pageTest, fixtures: electronFixtures },
+  metadata,
+});
+
+export default config;
